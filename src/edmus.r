@@ -1,28 +1,30 @@
 library(readr)
 library(dplyr)
+library(lubridate)
 library(stringr)
+library(tidyr)
 
-edmus_normalize_names <- function(data) {
-    data |>
-        rename_with(\(x) x |>
-            str_to_lower() |>
-            str_replace("^([^a-z])", "_\\1") |>
-            str_replace_all("(?:[^a-z0-9]|\\s)+", "_") |>
-            str_replace("_*$", ""))
-}
+source("src/common.r")
 
 edmus_load <- function(path) {
     read_tsv(path,
         locale = locale(encoding = "UTF-16"),
         guess_max = 9999, na = c("", "?")
-    ) |>
-        edmus_normalize_names()
+    ) |> normalize_names()
 }
 
 edmus_personal <- edmus_load("data/edmus-personal-220813_133309-DEN.txt") |>
     mutate(
-        wait_and_see = as.logical(wait_and_see)
-    )
+        wait_and_see = as.logical(wait_and_see),
+        across(c(
+            date_of_birth, first_exam, date_consent_form, created,
+            last_modified, last_info, last_clinical_assessment, last_clinical_follow_up,
+            starts_with("irreversible_") & !ends_with("_unknown_date"),
+            ends_with("_date") & !ends_with("_unknown_date") & -unknown_decease_date
+        ), dmy)
+    ) |>
+    drop_na(patient_id) |>
+    select(-ms_onset)
 
 edmus_diagnosis <- edmus_load("data/edmus-diagnosis-220811_121631-DEP.txt") |>
     mutate(
@@ -36,5 +38,14 @@ edmus_diagnosis <- edmus_load("data/edmus-diagnosis-220811_121631-DEP.txt") |>
         ))
     )
 
-edmus_clinical <- edmus_load("data/edmus-clinical-220811_122451-DEP.txt")
-edmus_episodes <- edmus_load("data/edmus-episodes-220811_121723-DEP.txt")
+edmus_clinical <- edmus_load("data/edmus-clinical-220811_122451-DEP.txt") |>
+    mutate(across(date, dmy))
+
+edmus_episodes <- edmus_load("data/edmus-episodes-220811_121723-DEP.txt") |>
+    mutate(across(date, dmy))
+
+edmus_studies <- edmus_load("data/edmus-study-230405_130411-DEN.txt")
+edmus_protocols <- edmus_load("data/edmus-protocol-230405_130423-DEN.txt")
+
+edmus_trt_dm <- edmus_load("data/edmus-trt_dm-230405_130357-DEN.txt") |>
+    mutate(across(ends_with("_date"), dmy))
