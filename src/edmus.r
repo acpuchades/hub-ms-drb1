@@ -16,6 +16,9 @@ edmus_load <- function(path) {
 edmus_personal <- edmus_load("data/edmus-personal-220813_133309-DEN.txt") |>
     mutate(
         wait_and_see = as.logical(wait_and_see),
+        across(other_identifier, \(x) x |>
+            as.numeric() |>
+            as.character()),
         across(c(
             date_of_birth, first_exam, date_consent_form, created,
             last_modified, last_info, last_clinical_assessment, last_clinical_follow_up,
@@ -28,6 +31,7 @@ edmus_personal <- edmus_load("data/edmus-personal-220813_133309-DEN.txt") |>
 
 edmus_diagnosis <- edmus_load("data/edmus-diagnosis-220811_121631-DEP.txt") |>
     mutate(
+        across(c(ms_onset, progression_onset), dmy),
         disease_course = factor(case_match(
             disease_course,
             1:2 ~ "RR",
