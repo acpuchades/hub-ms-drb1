@@ -20,12 +20,17 @@ patients <- edmus_personal |>
     ) |>
     left_join(
         edmus_diagnosis |>
-            select(patient_id, ms_onset, disease_course, progression_onset),
+            select(patient_id, ms_onset, disease_course, progression_onset) |>
+            mutate(disease_course = case_match(
+                disease_course, "RR" ~ "RR",
+                "SP-R" ~ "SP", "SP-NR" ~ "SP",
+                "PP-R" ~ "PP", "PP-NR" ~ "PP"
+            )),
         by = "patient_id"
     ) |>
     filter(
         !wait_and_see,
-        disease_course %in% c("RR", "SP-R", "SP-NR")
+        disease_course %in% c("RR", "SP")
     ) |>
     select(-wait_and_see) |>
     mutate(
