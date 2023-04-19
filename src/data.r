@@ -66,6 +66,7 @@ patients <- patients |>
     )
 
 clinical_iedss <- edmus_clinical |>
+    semi_join(patients, by = "patient_id") |>
     select(patient_id, date, edss_entered) |>
     group_by(patient_id) |>
     filter((max(date) - date) >= dmonths(6)) |>
@@ -80,31 +81,52 @@ clinical_iedss <- edmus_clinical |>
     ) |>
     ungroup()
 
-mssev_params <- patients |>
-    left_join(
-        clinical_iedss |>
-            slice_max(date, by = "patient_id") |>
-            select(patient_id, date_of_last_edss = date, iedss = iedss),
-        by = "patient_id"
-    ) |>
+iedss_global <- clinical_iedss |>
+    slice_max(date, by = "patient_id", n = 1, with_ties = FALSE) |>
+    select(patient_id, date, iedss)
+
+iedss_rr_phase <- clinical_iedss |>
+    left_join(patients, by = "patient_id") |>
+    filter(disease_course == "RR" | date <= progression_onset) |>
+    slice_max(date, by = "patient_id", n = 1, with_ties = FALSE) |>
+    select(patient_id, date, iedss)
+
+mssev_params_global <- iedss_global |>
+    left_join(patients, by = "patient_id") |>
     transmute(
         patient_id,
         edss = iedss,
-        ageatedss = (date_of_last_edss - date_of_birth) / dyears(1),
-        dd = disease_duration / dyears(1)
+        dd = (date - ms_onset) / dyears(1),
+        ageatedss = (date - date_of_birth) / dyears(1)
     )
 
-patients_armss <- ms_sev(mssev_params, type = "global_armss")$data
-
-patients_msss <- ms_sev(mssev_params, type = "global_msss", omss = TRUE)$data |>
-    filter(dd >= 1)
-
-severity_scores <- patients_msss |>
-    select(patient_id, iedss = edss, msss = oGMSSS) |>
-    left_join(
-        patients_armss |> select(patient_id, armss = gARMSS),
-        by = "patient_id"
+mssev_params_rr_phase <- iedss_rr_phase |>
+    left_join(patients, by = "patient_id") |>
+    transmute(
+        patient_id,
+        edss = iedss,
+        dd = (date - ms_onset) / dyears(1),
+        ageatedss = (date - date_of_birth) / dyears(1)
     )
+
+armss_global <- ms_sev(mssev_params_global, type = "global_armss")$data |>
+    select(patient_id, armss_global = "gARMSS")
+
+armss_rr_phase <- ms_sev(mssev_params_rr_phase, type = "global_armss")$data |>
+    select(patient_id, armss_rr_phase = "gARMSS")
+
+msss_global <- ms_sev(mssev_params_global, type = "global_msss", omsss = TRUE)$data |>
+    filter(dd >= 1) |>
+    select(patient_id, msss_global = "oGMSSS")
+
+msss_rr_phase <- ms_sev(mssev_params_rr_phase, type = "global_msss", omsss = TRUE)$data |>
+    filter(dd >= 1) |>
+    select(patient_id, msss_rr_phase = "oGMSSS")
+
+severity_scores <- armss_global |>
+    left_join(armss_rr_phase, by = "patient_id") |>
+    left_join(msss_global, by = "patient_id") |>
+    left_join(msss_rr_phase, by = "patient_id")
 
 patients <- patients |>
     left_join(severity_scores, by = "patient_id")
