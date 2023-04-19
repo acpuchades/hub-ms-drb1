@@ -68,6 +68,7 @@ patients <- patients |>
 clinical_iedss <- edmus_clinical |>
     select(patient_id, date, edss_entered) |>
     group_by(patient_id) |>
+    filter((max(date) - date) >= dmonths(6)) |>
     arrange(desc(date), .by_group = TRUE) %>%
     mutate(
         iedss = accumulate(edss_entered, \(x, y) {
