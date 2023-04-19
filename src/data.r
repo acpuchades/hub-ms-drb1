@@ -18,6 +18,7 @@ patients <- edmus_personal |>
         wait_and_see,
         starts_with("irreversible_dss_") & !ends_with("_unknown_date")
     ) |>
+    rename_with(~ str_replace(.x, "^irreversible_dss_", "date_of_iedss_")) |>
     left_join(
         edmus_diagnosis |>
             select(patient_id, ms_onset, disease_course, progression_onset) |>
@@ -39,7 +40,8 @@ patients <- edmus_personal |>
     inner_join(
         hla_data |>
             drop_na(codi_edm) |>
-            select(codi_edm, starts_with("tipatge_hla_drb1_")),
+            select(codi_edm, starts_with("tipatge_hla_drb1_")) |>
+            rename_with(~ str_replace(.x, "^tipatge_hla_drb1_", "hla_drb1_")),
         by = c(edmus_local_id = "codi_edm"), multiple = "first"
     )
 
@@ -99,6 +101,10 @@ treatment_times <- edmus_trt_dm |>
         )),
         time_on_moderate_efficacy_treatment = sum(if_else(
             inn %in% edmus_trt_dm_moderate_efficacy_inn, time_on_treatment, ddays(0)
+        )),
+        time_on_other_treatments = sum(if_else(
+            !inn %in% c(edmus_trt_dm_high_efficacy_inn, edmus_trt_dm_moderate_efficacy_inn),
+            time_on_treatment, ddays(0)
         ))
     )
 
