@@ -53,3 +53,14 @@ edmus_protocols <- edmus_load("data/edmus-protocol-230405_130423-DEN.txt")
 
 edmus_trt_dm <- edmus_load("data/edmus-trt_dm-230405_130357-DEN.txt") |>
     mutate(across(ends_with("_date"), dmy))
+
+edmus_trt_dm_high_efficacy_inn <- c(
+    "CLADRIBINE", "NATALIZUMAB", "OCRELIZUMAB", "ALEMTUZUMAB", "OFATUMUMAB", "RITUXIMAB"
+)
+
+edmus_trt_dm_moderate_efficacy_inn <- c(
+    "INTERFERON BETA 1B", "INTERFERON BETA 1A", "PEGINTERFERON BETA-1A", "INF BETA 1A, IM",
+    "AVONEX", "INF BETA 1A,SC", "BETAFERON", "INF BETA 1B", "REBIF", "INF BETA IA, IM",
+    "TERIFLUNOMIDE", "GLATIRAMER_ACETATE", "FINGOLIMOD", "DIMETHYL FUMARATE", "SIPONIMOD",
+    "TERIFULONOMIDA", "DIROXIMEL FUMARATE", "PONESIMOD"
+)

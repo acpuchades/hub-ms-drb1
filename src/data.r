@@ -86,6 +86,22 @@ clinical_iedss <- edmus_clinical |>
     ) |>
     ungroup()
 
+treatment_times <- edmus_trt_dm |>
+    mutate(time_on_treatment = case_match(
+        status,
+        "Stopped" ~ end_date - onset_date,
+        "Ongoing" ~ latest_date - onset_date
+    )) |>
+    group_by(patient_id) |>
+    summarize(
+        time_on_high_efficacy_treatment = sum(if_else(
+            inn %in% edmus_trt_dm_high_efficacy_inn, time_on_treatment, ddays(0)
+        )),
+        time_on_moderate_efficacy_treatment = sum(if_else(
+            inn %in% edmus_trt_dm_moderate_efficacy_inn, time_on_treatment, ddays(0)
+        ))
+    )
+
 iedss_global <- clinical_iedss |>
     slice_max(date, by = "patient_id", n = 1, with_ties = FALSE) |>
     select(patient_id, date, iedss)
@@ -134,6 +150,7 @@ severity_scores <- armss_global |>
     left_join(msss_rr_phase, by = "patient_id")
 
 patients <- patients |>
+    left_join(treatment_times, by = "patient_id") |>
     left_join(severity_scores, by = "patient_id")
 
 library(writexl)
