@@ -157,9 +157,30 @@ severity_scores <- armss_global |>
     left_join(msss_global, by = "patient_id") |>
     left_join(msss_rr_phase, by = "patient_id")
 
+hla_drb1_alleles <- patients$hla_drb1_1 |>
+    union(patients$hla_drb1_2) |>
+    na.omit()
+
+hla_drb1_alleles <- patients |>
+    select(patient_id, starts_with("hla_drb1_")) |>
+    cross_join(tibble(allele = hla_drb1_alleles)) |>
+    transmute(
+        patient_id, allele,
+        count = (hla_drb1_1 == allele) + (hla_drb1_2 == allele)
+    ) |>
+    arrange(patient_id, allele) |>
+    pivot_wider(
+        names_from = "allele",
+        names_prefix = "allele_",
+        values_from = "count"
+    ) |>
+    drop_na()
+
 patients <- patients |>
     left_join(treatment_times, by = "patient_id") |>
-    left_join(severity_scores, by = "patient_id")
+    left_join(severity_scores, by = "patient_id") |>
+    left_join(hla_drb1_alleles, by = "patient_id") |>
+    relocate(starts_with("allele_"), .after = "hla_drb1_2")
 
 library(writexl)
 dir.create("output", showWarnings = FALSE)
