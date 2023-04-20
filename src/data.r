@@ -159,9 +159,10 @@ severity_scores <- armss_global |>
 
 hla_drb1_alleles <- patients$hla_drb1_1 |>
     union(patients$hla_drb1_2) |>
-    na.omit()
+    na.omit() |>
+    sort()
 
-hla_drb1_alleles <- patients |>
+allele_info <- patients |>
     select(patient_id, starts_with("hla_drb1_")) |>
     cross_join(tibble(allele = hla_drb1_alleles)) |>
     transmute(
@@ -176,10 +177,17 @@ hla_drb1_alleles <- patients |>
     ) |>
     drop_na()
 
+time_to_second_line_trt <- edmus_trt_dm |>
+    semi_join(patients, by = "patient_id") |>
+    filter(inn %in% edmus_trt_dm_high_efficacy_inn) |>
+    slice_min(onset_date, by = "patient_id", n = 1, with_ties = FALSE) |>
+    select(patient_id, date_of_high_efficacy_trt_start = onset_date)
+
 patients <- patients |>
     left_join(treatment_times, by = "patient_id") |>
+    left_join(time_to_second_line_trt, by = "patient_id") |>
     left_join(severity_scores, by = "patient_id") |>
-    left_join(hla_drb1_alleles, by = "patient_id") |>
+    left_join(allele_info, by = "patient_id") |>
     relocate(starts_with("allele_"), .after = "hla_drb1_2")
 
 library(writexl)
