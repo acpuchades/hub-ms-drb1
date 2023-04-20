@@ -26,8 +26,8 @@ edmus_personal <- edmus_load("data/edmus-personal-220813_133309-DEN.txt") |>
             ends_with("_date") & !ends_with("_unknown_date") & -unknown_decease_date
         ), dmy)
     ) |>
-    drop_na(patient_id) |>
-    select(-ms_onset)
+    select(-ms_onset) |>
+    drop_na(patient_id)
 
 edmus_diagnosis <- edmus_load("data/edmus-diagnosis-220811_121631-DEP.txt") |>
     mutate(

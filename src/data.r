@@ -1,11 +1,11 @@
 library(purrr)
 library(stringr)
-
 library(ms.sev)
 
 source("src/edmus.r")
 source("src/biobank.r")
 source("src/hla.r")
+
 
 patients <- edmus_personal |>
     select(
@@ -110,19 +110,19 @@ treatment_times <- edmus_trt_dm |>
 
 iedss_global <- clinical_iedss |>
     slice_max(date, by = "patient_id", n = 1, with_ties = FALSE) |>
-    select(patient_id, date, iedss)
+    select(patient_id, date, iedss_global = iedss)
 
 iedss_rr_phase <- clinical_iedss |>
     left_join(patients, by = "patient_id") |>
     filter(disease_course == "RR" | date <= progression_onset) |>
     slice_max(date, by = "patient_id", n = 1, with_ties = FALSE) |>
-    select(patient_id, date, iedss)
+    select(patient_id, date, iedss_rr_phase = iedss)
 
 mssev_params_global <- iedss_global |>
     left_join(patients, by = "patient_id") |>
     transmute(
         patient_id,
-        edss = iedss,
+        edss = iedss_global,
         dd = (date - ms_onset) / dyears(1),
         ageatedss = (date - date_of_birth) / dyears(1)
     )
@@ -131,7 +131,7 @@ mssev_params_rr_phase <- iedss_rr_phase |>
     left_join(patients, by = "patient_id") |>
     transmute(
         patient_id,
-        edss = iedss,
+        edss = iedss_rr_phase,
         dd = (date - ms_onset) / dyears(1),
         ageatedss = (date - date_of_birth) / dyears(1)
     )
@@ -151,6 +151,8 @@ msss_rr_phase <- ms_sev(mssev_params_rr_phase, type = "global_msss", omsss = TRU
     select(patient_id, msss_rr_phase = "oGMSSS")
 
 severity_scores <- armss_global |>
+    left_join(iedss_global |> select(-date), by = "patient_id") |>
+    left_join(iedss_rr_phase |> select(-date), by = "patient_id") |>
     left_join(armss_rr_phase, by = "patient_id") |>
     left_join(msss_global, by = "patient_id") |>
     left_join(msss_rr_phase, by = "patient_id")
