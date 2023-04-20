@@ -6,7 +6,6 @@ source("src/edmus.r")
 source("src/biobank.r")
 source("src/hla.r")
 
-
 patients <- edmus_personal |>
     select(
         patient_id,
@@ -29,10 +28,7 @@ patients <- edmus_personal |>
             )),
         by = "patient_id"
     ) |>
-    filter(
-        !wait_and_see,
-        disease_course %in% c("RR", "SP")
-    ) |>
+    filter(!wait_and_see) |>
     select(-wait_and_see) |>
     mutate(
         disease_duration = last_clinical_follow_up - ms_onset,
@@ -41,7 +37,12 @@ patients <- edmus_personal |>
         hla_data |>
             drop_na(codi_edm) |>
             select(codi_edm, starts_with("tipatge_hla_drb1_")) |>
-            rename_with(~ str_replace(.x, "^tipatge_hla_drb1_", "hla_drb1_")),
+            rename_with(~ str_replace(.x, "^tipatge_hla_drb1_", "drb1_allele_")) |>
+            mutate(drb1_haplotype = str_c(
+                pmin(drb1_allele_1, drb1_allele_2),
+                pmax(drb1_allele_1, drb1_allele_2),
+                sep = "/"
+            )),
         by = c(edmus_local_id = "codi_edm"), multiple = "first"
     )
 
@@ -60,10 +61,11 @@ patients <- patients |>
         relapse_count_until_progression = replace_na(
             relapse_count_until_progression, 0
         ),
-        duration_of_rr_phase = if_else(
-            disease_course |> str_starts("SP"),
-            progression_onset - ms_onset,
-            last_clinical_follow_up - ms_onset
+        duration_of_rr_phase = case_match(
+            disease_course,
+            "RR" ~ last_clinical_follow_up - ms_onset,
+            "SP" ~ progression_onset - ms_onset,
+            "PP" ~ dyears(0)
         ),
         arr_during_rr_phase = if_else(
             duration_of_rr_phase >= dyears(1),
@@ -157,22 +159,26 @@ severity_scores <- armss_global |>
     left_join(msss_global, by = "patient_id") |>
     left_join(msss_rr_phase, by = "patient_id")
 
-hla_drb1_alleles <- patients$hla_drb1_1 |>
-    union(patients$hla_drb1_2) |>
+drb1_alleles <- patients$drb1_allele_1 |>
+    union(patients$drb1_allele_2) |>
     na.omit() |>
     sort()
 
 allele_info <- patients |>
-    select(patient_id, starts_with("hla_drb1_")) |>
-    cross_join(tibble(allele = hla_drb1_alleles)) |>
+    select(patient_id, starts_with("drb1_allele_")) |>
+    cross_join(tibble(allele = drb1_alleles)) |>
     transmute(
         patient_id, allele,
-        count = (hla_drb1_1 == allele) + (hla_drb1_2 == allele)
+        count = (drb1_allele_1 == allele) + (drb1_allele_2 == allele)
     ) |>
     arrange(patient_id, allele) |>
+    mutate(
+        allele_s = if_else(allele < 10, str_c("0", allele), as.character(allele))
+    ) |>
     pivot_wider(
-        names_from = "allele",
-        names_prefix = "allele_",
+        id_cols = patient_id,
+        names_from = "allele_s",
+        names_glue = "drb1_{allele_s}_count",
         values_from = "count"
     ) |>
     drop_na()
@@ -188,7 +194,7 @@ patients <- patients |>
     left_join(time_to_second_line_trt, by = "patient_id") |>
     left_join(severity_scores, by = "patient_id") |>
     left_join(allele_info, by = "patient_id") |>
-    relocate(starts_with("allele_"), .after = "hla_drb1_2")
+    relocate(matches("drb1_[0-9]{2}_count"), .after = "drb1_haplotype")
 
 library(writexl)
 dir.create("output", showWarnings = FALSE)
