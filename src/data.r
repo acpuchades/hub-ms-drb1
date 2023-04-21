@@ -31,7 +31,8 @@ patients <- edmus_personal |>
     filter(!wait_and_see) |>
     select(-wait_and_see) |>
     mutate(
-        disease_duration = last_clinical_follow_up - ms_onset,
+        age_at_onset = (ms_onset - date_of_birth) / dyears(1),
+        disease_duration = (last_clinical_follow_up - ms_onset) / dyears(1)
     ) |>
     inner_join(
         hla_data |>
@@ -45,6 +46,37 @@ patients <- edmus_personal |>
             )),
         by = c(edmus_local_id = "codi_edm"), multiple = "first"
     )
+
+dss_reached <- patients |>
+    select(patient_id) |>
+    cross_join(tibble(dss_reached = 1:10)) |>
+    left_join(
+        edmus_clinical |>
+            select(patient_id, date, dss_entered) |>
+            drop_na() |>
+            group_by(patient_id) |>
+            arrange(date, .by_group = TRUE) |>
+            mutate(dss_reached = cummax(dss_entered)) |>
+            ungroup() |>
+            select(patient_id, dss_reached, date),
+        by = c("patient_id", "dss_reached")
+    ) |>
+    slice_min(date, by = c("patient_id", "dss_reached"), n = 1, with_ties = FALSE) |>
+    group_by(patient_id) |>
+    arrange(dss_reached, .by_group = TRUE) |>
+    fill(date, .direction = "up") |>
+    ungroup()
+
+patients <- patients |>
+    left_join(
+        dss_reached |> pivot_wider(
+            names_from = "dss_reached",
+            names_prefix = "date_of_first_dss_",
+            values_from = "date"
+        ),
+        by = "patient_id"
+    ) |>
+    relocate(starts_with("date_of_first_dss_"), .before = "date_of_iedss_1")
 
 rr_relapse_counts <- patients |>
     left_join(
@@ -77,6 +109,7 @@ patients <- patients |>
 clinical_iedss <- edmus_clinical |>
     semi_join(patients, by = "patient_id") |>
     select(patient_id, date, edss_entered) |>
+    drop_na() |>
     group_by(patient_id) |>
     filter((max(date) - date) >= dmonths(6)) |>
     arrange(desc(date), .by_group = TRUE) %>%
